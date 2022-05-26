@@ -5,13 +5,14 @@ on: [push, pull_request]
 jobs:
   static:
     runs-on: ubuntu-latest
+    name: static
 
     strategy:
       matrix:
         php: ['7.4']
-        moodle-branch: ['MOODLE_311_STABLE']
+        moodle-branch: ['MOODLE_400_STABLE']
         database: ['pgsql']
-        opencast: ['9.3']
+        opencast: ['11.5']
 
     steps:
       - name: Start PostgreSQL
@@ -38,6 +39,7 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
+
       - name: npm cache
         uses: actions/cache@v2
         with:
@@ -45,6 +47,7 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
+
       - name: Initialise moodle-plugin-ci
         run: |
           composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^3
@@ -52,6 +55,7 @@ jobs:
           echo $(cd ci/vendor/bin; pwd) >> $GITHUB_PATH
           sudo locale-gen en_AU.UTF-8
           echo "NVM_DIR=$HOME/.nvm" >> $GITHUB_ENV
+
       - name: Install moodle-plugin-ci
         run: |
           moodle-plugin-ci add-plugin Opencast-Moodle/moodle-tool_opencast
@@ -74,7 +78,7 @@ jobs:
 
       - name: Moodle Code Checker
         if: ${{ always() }}
-        run: moodle-plugin-ci codechecker --max-warnings 5
+        run: moodle-plugin-ci codechecker
 
       - name: Moodle PHPDoc Checker
         if: ${{ always() }}
@@ -99,26 +103,23 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: static
+    name: test (${{matrix.moodle-branch}}/${{matrix.php}}/${{matrix.database}})
 
     strategy:
       fail-fast: false
       matrix:
-        php: ['7.3', '7.4']
-        moodle-branch: ['MOODLE_39_STABLE', 'MOODLE_310_STABLE', 'MOODLE_311_STABLE', 'master']
+        php: ['7.4']
+        moodle-branch: ['MOODLE_39_STABLE', 'MOODLE_311_STABLE', 'master']
         database: ['mariadb', 'pgsql']
-        opencast: ['9.3']
+        opencast: ['11.5']
 
     steps:
       - name: Start MariaDB
         if: matrix.database == 'mariadb'
-        run: docker run -p 3306:3306 -e MYSQL_USER=root -e MYSQL_ALLOW_EMPTY_PASSWORD=true -d mariadb:10.5
+        run: docker run -p 3306:3306 -e MYSQL_USER=root -e MYSQL_ALLOW_EMPTY_PASSWORD=true -d mariadb:10
 
       - name: Start PostgreSQL
-        if: matrix.database == 'pgsql' && matrix.moodle-branch != 'master'
-        run: docker run -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_HOST_AUTH_METHOD=trust -d postgres:9.6
-
-      - name: Start PostgreSQL
-        if: matrix.database == 'pgsql' && matrix.moodle-branch == 'master'
+        if: matrix.database == 'pgsql'
         run: docker run -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_HOST_AUTH_METHOD=trust -d postgres:10
 
       - name: Check out opencast-docker
@@ -152,6 +153,7 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
+
       - name: npm cache
         uses: actions/cache@v2
         with:
@@ -159,6 +161,7 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
+
       - name: Initialise moodle-plugin-ci
         run: |
           composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^3
@@ -166,6 +169,7 @@ jobs:
           echo $(cd ci/vendor/bin; pwd) >> $GITHUB_PATH
           sudo locale-gen en_AU.UTF-8
           echo "NVM_DIR=$HOME/.nvm" >> $GITHUB_ENV
+
       - name: Install moodle-plugin-ci
         run: |
           moodle-plugin-ci add-plugin Opencast-Moodle/moodle-tool_opencast
@@ -180,4 +184,4 @@ jobs:
 
       - name: Behat features
         if: ${{ always() }}
-        run: moodle-plugin-ci behat --profile chrome
+        run: moodle-plugin-ci behat --profile chrome --auto-rerun 0
